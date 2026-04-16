@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Proforma - Multiservicios Super Mario</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -46,6 +47,17 @@
       cursor: pointer;
     }
     .btn-reset:hover { background: #f0f0f0; }
+    .btn-img {
+      background: #e8a020;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-img:hover { background: #c07810; }
 
     /* ── Hoja carta: 216mm x 279mm ── */
     .proforma {
@@ -156,7 +168,15 @@
       border-color: #1a2d5a;
       background: #fff;
     }
-    textarea { resize: vertical; min-height: 60px; }
+    textarea { 
+  resize: none; 
+  min-height: 100px; 
+  overflow: hidden; 
+  /* Solución para html2canvas */
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
 
     /* ── Tabla de ítems ── */
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
@@ -325,6 +345,7 @@
   <div class="toolbar">
     <button class="btn-reset" onclick="resetForm()">↺ Limpiar</button>
     <button class="btn-pdf" onclick="descargarPDF()">⬇ Descargar PDF</button>
+    <button class="btn-img" onclick="descargarIMG()">🖼 Exportar Imagen</button>
   </div>
 
   <div class="proforma" id="proforma-content">
@@ -508,10 +529,66 @@
       addRow(); addRow();
     }
 
+    // ── Auto-expand textarea observaciones ──
+    const obs = document.getElementById('observaciones');
+    function autoExpand() {
+      obs.style.height = 'auto';
+      obs.style.height = obs.scrollHeight + 'px';
+    }
+    obs.addEventListener('input', autoExpand);
+
+    // ====================================================================
+    // TRUCO PARA ARREGLAR EL ERROR DEL TEXTAREA EN HTML2CANVAS
+    // ====================================================================
+    function prepararParaExportar() {
+      // 1. Ocultar botones
+      document.querySelectorAll('.del-btn, .add-btn').forEach(el => el.style.display='none');
+      document.querySelector('.toolbar').style.display = 'none';
+
+      // 2. Crear un div temporal que reemplace al textarea
+      const obsTextarea = document.getElementById('observaciones');
+      const divTemporal = document.createElement('div');
+      divTemporal.id = 'obs-temporal';
+      
+      // Pasar el texto escrito (o el placeholder si está vacío)
+      divTemporal.innerText = obsTextarea.value || obsTextarea.placeholder;
+      if (!obsTextarea.value) { divTemporal.style.color = '#888'; }
+
+      // Copiarle exactamente el mismo diseño del textarea
+      divTemporal.style.background = '#f8f8f8';
+      divTemporal.style.border = '1px solid #e0e0e0';
+      divTemporal.style.borderRadius = '5px';
+      divTemporal.style.padding = '6px 9px';
+      divTemporal.style.fontSize = '12px';
+      divTemporal.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+      divTemporal.style.minHeight = '100px';
+      divTemporal.style.whiteSpace = 'pre-wrap';
+      divTemporal.style.wordWrap = 'break-word';
+
+      // Insertar el div y ocultar el textarea
+      obsTextarea.parentNode.insertBefore(divTemporal, obsTextarea);
+      obsTextarea.style.display = 'none';
+    }
+
+    function restaurarDespuesDeExportar() {
+      // Volver a mostrar botones
+      document.querySelectorAll('.del-btn, .add-btn').forEach(el => el.style.display='');
+      document.querySelector('.toolbar').style.display = '';
+
+      // Borrar el div temporal y volver a mostrar el textarea original
+      const divTemporal = document.getElementById('obs-temporal');
+      if (divTemporal) divTemporal.remove();
+      document.getElementById('observaciones').style.display = '';
+    }
+    // ====================================================================
+
+    // ── Descargar PDF ──
     function descargarPDF() {
       const numDoc = document.getElementById('doc-num').value || 'PRO-001';
       const cliente = document.getElementById('cliente-nombre').value || 'cliente';
-      document.querySelectorAll('.del-btn, .add-btn').forEach(el => el.style.display='none');
+      
+      prepararParaExportar(); // Aplicamos el truco antes de la foto
+
       const opt = {
         margin: [8, 8, 8, 8],
         filename: `Proforma_${numDoc}_${cliente}.pdf`,
@@ -519,13 +596,33 @@
         html2canvas: { scale:2, useCORS:true },
         jsPDF: { unit:'mm', format:'letter', orientation:'portrait' }
       };
+
       html2pdf().set(opt).from(document.getElementById('proforma-content')).save()
         .then(() => {
-          document.querySelectorAll('.del-btn, .add-btn').forEach(el => el.style.display='');
+          restaurarDespuesDeExportar(); // Todo vuelve a la normalidad
         });
+    }
+
+    // ── Exportar imagen PNG ──
+    function descargarIMG() {
+      const numDoc = document.getElementById('doc-num').value || 'PRO-001';
+      const cliente = document.getElementById('cliente-nombre').value || 'cliente';
+      
+      prepararParaExportar(); // Aplicamos el truco antes de la foto
+
+      html2canvas(document.getElementById('proforma-content'), {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'Proforma_' + numDoc + '_' + cliente + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        restaurarDespuesDeExportar(); // Todo vuelve a la normalidad
+      });
     }
 
     addRow(); addRow();
   </script>
-</body>
-</html>
